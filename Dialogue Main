@@ -220,7 +220,8 @@ S.MouseButton1Click:Connect(function()
 	S.Selectable = false
 end)
 
-Exit.MouseButton1Click:Connect(function()
+
+local function ExitFunction()
 	if Chatting == true then
 		--	local IUI = DetectedNPC.UpperTorso:FindFirstChild("InteractUI") or DetectedNPC.Torso:FindFirstChild ("InteractUI")
 		if DetectedNPC:GetAttribute("InAnimate") ~= true then
@@ -243,6 +244,11 @@ Exit.MouseButton1Click:Connect(function()
 			DetectedNPC.UpperTorso.DialogPrompt.ProximityPrompt.Enabled = true			
 		end)
 	end
+end
+
+
+Exit.MouseButton1Click:Connect(function()
+	ExitFunction()
 end)
 
 script.Parent:GetPropertyChangedSignal("Enabled"):Connect(function()
@@ -318,26 +324,5 @@ RunService.RenderStepped:Connect(function()
 end)
 
 script.Parent.ExitEvent.Event:connect(function()
-	if Chatting == true then
-		--	local IUI = DetectedNPC.UpperTorso:FindFirstChild("InteractUI") or DetectedNPC.Torso:FindFirstChild ("InteractUI")
-		if DetectedNPC:GetAttribute("InAnimate") ~= true then
-			talk:Stop()			
-		end
-		DetectedNPC:WaitForChild("Main"):WaitForChild("InDialogue").Value = false
-		Chatting = false
-		Detected = false
-		plr:SetAttribute("Dialogue", false)
-		--		IUI.Enabled = true
-		Dialogue.Enabled = false
-		Exit.Visible = false
-		S.Selectable = true
-		Skip.Value = false
-		plr.Character.Humanoid.WalkSpeed = 11
-		Upfront.Enabled = true
-		ZoneUI.Enabled = true
-		coroutine.wrap(function()
-			wait(1)
-			DetectedNPC.UpperTorso.DialogPrompt.ProximityPrompt.Enabled = true			
-		end)
-	end
+	ExitFunction()
 end)
