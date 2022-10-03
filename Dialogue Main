@@ -1,0 +1,343 @@
+-- Module in replicated storage, or whatnot
+
+
+local player = game.Players.LocalPlayer
+
+local dialogue = {
+	speakername = "Scarlet Raven";
+	speakercolor = Color3.fromRGB(255, 76, 94);
+	dialogue = "Hey, you! I'm a test NPC for Dialogue. How are you?";
+	
+	options = {
+		["Gross, don't talk to me."] = {
+			x = true;
+			dialogue = "That's not very nice.. :(";
+	--		dialogue2 = "Get out of here whippersnapper!";
+		};
+
+		["I'm doing great! So dialogue trees?"] = {
+			x = false;
+			dialogue = "Yep, I'm currently speaking via an entirely modular system that allows up to 500 total lines of text between responses and options.";
+			options = {
+				["Cringe, don't talk to me."] = {
+					x = true;
+	--				dialogue = "That's not very nice.. :(";
+					dialogue = "Get out of here morbhead!";
+				};
+				["Functions on responses? Give me a sick quest!"] = {
+					x = true;
+					onSelected = function()
+						
+						local plrGui = player.PlayerGui
+						--I almost did a script.Parent here \/ 
+						local Modules = game:GetService("ReplicatedStorage"):WaitForChild("Modules",100)
+						local Network = require(Modules:WaitForChild("RemoteNetwork")).new()
+						Network["AssignQuest"]:FireServer("A_boar'ing_task")
+						local PlayerNotificationGui = plrGui:FindFirstChild("PlayerNotificationGui")
+						local event = PlayerNotificationGui:FindFirstChildOfClass("BindableEvent")
+						local displayText = " Quest Started: ".. "<b>" .. "<font color=\"" .. "rgb(255, 230, 34)" .. "\">" .. "A boar'ing task" .. "</font>" .. "</b>"
+						event:Fire(displayText, false, "QuestStarted")
+						print("Quest Assigned")
+					end;
+
+					dialogue = "Don't worry, I got you."
+				}
+			}
+		};
+	};
+}
+
+return dialogue
+
+
+-- Local Script within UI to decipher modules based off detected NPCs
+
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+
+local DetectedNPC = nil
+local Detected = false
+local Chatting = false
+local Skip = false
+local Exit = false
+
+
+local plr = game.Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+local Dialogue = script.Parent
+local C1Text = Dialogue.C1Slot.C1Text
+local C2Text = Dialogue.C2Slot.C2Text
+local C1Slot = Dialogue.C1Slot
+local C2Slot = Dialogue.C2Slot
+local D1Text = Dialogue.D1
+local S = Dialogue.S
+local Skip = Dialogue.Skip
+local Speaker = Dialogue.Background.SpeakerName
+local Sounds = Dialogue.Sounds
+local Exit = Dialogue.CloseButton
+local Upfront = script.Parent.Parent:WaitForChild("UpFront")
+local ZoneUI = script.Parent.Parent:WaitForChild("ZoneUI")
+
+local Character = plr.Character or plr.CharacterAdded:Wait()
+local CharHMR = Character:WaitForChild("HumanoidRootPart")
+
+local NPCS = game.Workspace.Map:WaitForChild("NPCS")
+
+-- NPC Modules
+local DialogInfo = game.ReplicatedStorage.Modules:WaitForChild("Dialog")
+local connections = {}
+
+function DialogSequence(dialogueData, path)
+	for i,v in pairs(connections) do
+		v:Disconnect()
+	end
+	if dialogueData then
+		local C1 = C1Text.MouseButton1Click:Connect(function()
+			if Chatting == true then
+				Sounds.Click:Play()
+				C1Slot.Selectable = false
+				C2Slot.Selectable = false
+				C1Text.Selectable = false
+				C2Text.Selectable = false
+				C1Slot.Visible = false
+				C2Slot.Visible = false
+				S.Selectable = true
+				
+				local close = path[C1Text.Text].x	
+				DialogRender(false, dialogueData, path[C1Text.Text].dialogue, close, path[C1Text.Text])
+
+				if path[C1Text.Text] and path[C1Text.Text].onSelected then
+					path[C1Text.Text].onSelected()
+				end
+			end
+		end)
+		table.insert(connections, C1)
+
+		local C2 = C2Text.MouseButton1Click:Connect(function()
+			if Chatting == true then
+				Sounds.Click:Play()
+				C1Slot.Selectable = false
+				C2Slot.Selectable = false
+				C1Text.Selectable = false
+				C2Text.Selectable = false
+				C1Slot.Visible = false
+				C2Slot.Visible = false
+				S.Selectable = true
+				
+				local close = path[C2Text.Text].x
+				DialogRender(false, dialogueData, path[C2Text.Text].dialogue, close, path[C2Text.Text])
+				
+				if path[C2Text.Text] and path[C2Text.Text].onSelected then
+					path[C2Text.Text].onSelected()
+				end
+			end
+		end)
+		table.insert(connections, C2)
+	end
+end
+
+function DialogRender(state, dialogueData, line, close, path)
+	D1Text.MaxVisibleGraphemes = 0
+	D1Text.Text = line
+	for i = 1, #line do
+		if Skip.Value == true then
+			D1Text.MaxVisibleGraphemes = -1
+			Skip.Value = false
+			break
+		end
+		D1Text.MaxVisibleGraphemes = i
+		wait(0.01)
+		Sounds.Talk:Play()
+	end
+	if close == true then
+		wait(.5)
+		Exit.Visible = true
+	elseif state ~= true and path.options then
+		RenderOptions(dialogueData, path.options)
+	end
+end
+
+
+function RenderOptions(dialogueData, options)
+	local choice = false
+	for i,v in pairs(options) do
+		if choice == false then
+			choice = true
+			C1Text.Text = i
+			C1Slot.Selectable = true
+			C1Slot.Visible = true
+		else
+			C2Text.Text = i
+			C2Text.Selectable = true
+			C2Slot.Visible = true
+		end
+	end
+	DialogSequence(dialogueData, options)
+end
+
+local function BeginDialogSequence()
+	if Detected == true then
+		DetectedNPC:WaitForChild("Main"):WaitForChild("InDialogue").Value = true
+		
+		if DetectedNPC:GetAttribute("InAnimate") ~= true then
+			local humanoid = DetectedNPC.NPC
+			local animation2 = DetectedNPC.Main:WaitForChild('Talking')
+			talk = humanoid:LoadAnimation(animation2)
+			talk.Looped = false
+			talk:Play()
+		end
+		
+		Upfront.Enabled = false
+		ZoneUI.Enabled = false
+		local dialogueData = require(DialogInfo:FindFirstChild(DetectedNPC.Name))
+		local SpeakerName = dialogueData.speakername
+		local NameColor = dialogueData.speakercolor
+		
+		
+		Speaker.Text = SpeakerName
+		Speaker.TextColor3 = NameColor
+		DetectedNPC.UpperTorso.DialogPrompt.ProximityPrompt.Enabled = false
+		Chatting = true
+		Detected = false
+		
+		DialogRender(true, dialogueData, dialogueData.dialogue, false)
+		
+		if dialogueData.onSelected then
+			dialogueData.onSelected()
+		end
+		if dialogueData.options then
+			RenderOptions(dialogueData, dialogueData.options)
+		else
+			wait(.5)
+			Exit.Visible = true
+		end
+	end
+end
+
+S.MouseButton1Click:Connect(function()
+	Skip.Value = true
+	S.Selectable = false
+end)
+
+Exit.MouseButton1Click:Connect(function()
+	if Chatting == true then
+		--	local IUI = DetectedNPC.UpperTorso:FindFirstChild("InteractUI") or DetectedNPC.Torso:FindFirstChild ("InteractUI")
+		if DetectedNPC:GetAttribute("InAnimate") ~= true then
+			talk:Stop()			
+		end
+		DetectedNPC:WaitForChild("Main"):WaitForChild("InDialogue").Value = false
+		Chatting = false
+		Detected = false
+		plr:SetAttribute("Dialogue", false)
+--		IUI.Enabled = true
+		Dialogue.Enabled = false
+		Exit.Visible = false
+		S.Selectable = true
+		Skip.Value = false
+		plr.Character.Humanoid.WalkSpeed = 11
+		Upfront.Enabled = true
+		ZoneUI.Enabled = true
+		coroutine.wrap(function()
+			wait(1)
+			DetectedNPC.UpperTorso.DialogPrompt.ProximityPrompt.Enabled = true			
+		end)
+	end
+end)
+
+script.Parent:GetPropertyChangedSignal("Enabled"):Connect(function()
+	if Detected == true then
+		plr:SetAttribute("Dialogue", true)
+		BeginDialogSequence()		
+	end
+end)
+
+
+RunService.RenderStepped:Connect(function()
+	
+	
+	if Detected == false and Chatting == false then
+		for i, NPC in pairs(NPCS:GetChildren()) do
+			local Humanoid = NPC:FindFirstChild("NPC")
+			local HMR = NPC:FindFirstChild("HumanoidRootPart")
+			
+			if Humanoid and HMR then
+				local dist = nil
+				if NPC:GetAttribute("InAnimate") == true then
+					dist = 25
+				else
+					dist = 15
+				end
+				if (HMR.Position - CharHMR.Position).magnitude < 15 then
+					Detected = true
+					DetectedNPC = NPC
+					NPC.UpperTorso.DialogPrompt.ProximityPrompt.Enabled = true
+					print(DetectedNPC.Name)
+				end
+			end
+		end
+	end
+	
+	if Detected == true and Chatting == false then
+		local Humanoid = DetectedNPC:FindFirstChild("NPC")
+		local HMR = DetectedNPC:FindFirstChild("HumanoidRootPart")
+			
+		if Humanoid and HMR then
+			local dist = nil
+			if DetectedNPC:GetAttribute("InAnimate") == true then
+				dist = 25
+			else
+				dist = 15
+			end
+			if (HMR.Position - CharHMR.Position).magnitude > 15 then
+				Detected = false
+				DetectedNPC.UpperTorso.DialogPrompt.ProximityPrompt.Enabled = false
+				DetectedNPC = nil
+			else	
+			end
+		end
+	end
+	
+	if Chatting == true then
+		local Humanoid = DetectedNPC:FindFirstChild("NPC")
+		local HMR = DetectedNPC:FindFirstChild("HumanoidRootPart")
+		
+		if Humanoid and HMR then
+			Camera.CameraType = Enum.CameraType.Scriptable
+			Camera.CFrame = Camera.CFrame:Lerp(HMR.CFrame * CFrame.new(-4, 4, -7) * CFrame.fromOrientation(math.rad(-20), math.rad(215), 0), 0.07)
+		
+		    
+		end
+		Camera.CFrame = Camera.CFrame:Lerp(HMR.CFrame * CFrame.new(0, 0, 0) * CFrame.fromOrientation(math.rad(-20), math.rad(215), 0), 0.07)
+	end
+		
+	if plr.Character:WaitForChild("Humanoid").Health <= 0 then	
+		Camera.CameraType =  Enum.CameraType.Scriptable
+	end
+	
+end)
+
+script.Parent.ExitEvent.Event:connect(function()
+	if Chatting == true then
+		--	local IUI = DetectedNPC.UpperTorso:FindFirstChild("InteractUI") or DetectedNPC.Torso:FindFirstChild ("InteractUI")
+		if DetectedNPC:GetAttribute("InAnimate") ~= true then
+			talk:Stop()			
+		end
+		DetectedNPC:WaitForChild("Main"):WaitForChild("InDialogue").Value = false
+		Chatting = false
+		Detected = false
+		plr:SetAttribute("Dialogue", false)
+		--		IUI.Enabled = true
+		Dialogue.Enabled = false
+		Exit.Visible = false
+		S.Selectable = true
+		Skip.Value = false
+		plr.Character.Humanoid.WalkSpeed = 11
+		Upfront.Enabled = true
+		ZoneUI.Enabled = true
+		coroutine.wrap(function()
+			wait(1)
+			DetectedNPC.UpperTorso.DialogPrompt.ProximityPrompt.Enabled = true			
+		end)
+	end
+end)
