@@ -1,4 +1,4 @@
--- Some out of context code from the Trading System of Roverse (Server Side)
+-- Some out-of-context code from the Trading System of Roverse (Server Side)
 
 function TradeService.AddItem(player, itemData)
 	local sessionData = sessions[player]
